@@ -35,6 +35,7 @@ defmodule ExMachina.EctoTest do
       name: "John Doe",
       admin: false,
       articles: [],
+      site_id: nil
     }
   end
 

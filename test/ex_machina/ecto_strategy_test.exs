@@ -120,6 +120,18 @@ defmodule ExMachina.EctoStrategyTest do
     assert article.author == my_user
   end
 
+  test "lazy attributes can be used to assign associations to the same record" do
+    article = TestFactory.insert(:article_for_site)
+    assert article.author.site == article.site
+  end
+
+  test "lazy associations can be overriden by passed in attributes" do
+    site = TestFactory.insert(:site)
+    article = TestFactory.insert(:article_for_site, site: site)
+    assert article.site == site
+    assert article.author.site == site
+  end
+
   test "insert/1 raises a friendly error when casting invalid types" do
     message = ~r/Failed to cast `invalid` of type Elixir.ExMachina.InvalidType/
     assert_raise RuntimeError, message, fn ->
