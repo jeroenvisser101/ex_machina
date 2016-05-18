@@ -50,6 +50,10 @@ defmodule ExMachina do
         ExMachina.build_list(__MODULE__, number_of_factories, factory_name, attrs)
       end
 
+      def defer(weight \\ 0, func) do
+        ExMachina.defer(weight, func)
+      end
+
       @spec create(any) :: no_return
       def create(_) do
         raise_function_replaced_error("create/1", "insert/1")
@@ -149,6 +153,20 @@ defmodule ExMachina do
     end
   end
 
+  def defer(weight \\ 0, func)
+
+  def defer(weight, func) when is_number(weight) and is_function(func, 1) do
+    %ExMachina.DeferredAttribute{weight: weight, func: func}
+  end
+
+  def defer(weight, func) when is_function(func, 1) do
+    raise ArgumentError, "The first argument must be a number.  You gave: #{inspect(weight)}"
+  end
+
+  def defer(weight, func) when is_number(weight) do
+    raise ArgumentError, "The second argument must be a function with arity 1.  You gave: #{inspect(func)}"
+  end
+
   defp do_merge(%{__struct__: _} = record, attrs) do
     struct!(record, attrs)
   end
@@ -156,9 +174,13 @@ defmodule ExMachina do
     Map.merge(record, attrs)
   end
 
-  # Entry point to resolve the record map/struct
-  defp resolve(record), do: resolve(record, nil)
+  # Entry point to resolve the record map/struct.
+  #
+  # Traverses the record and applys functions, then undefers and computes
+  # deferred attributes according to weight.
+  defp resolve(record), do: resolve(record, nil) |> undefer
 
+  defp resolve(%ExMachina.DeferredAttribute{} = attr, _scope), do: attr
   defp resolve(%{__struct__: _} = record, scope) do
     attrs = Map.from_struct(record) |> resolve(scope)
     struct!(record, attrs)
@@ -173,6 +195,42 @@ defmodule ExMachina do
     Enum.map(list, &resolve(&1, scope))
   end
   defp resolve(value, _scope), do: value
+
+  defp undefer(record, weight \\ 0) do
+    case do_undefer(record, weight) do
+      {record, nil} -> record
+      {record, next_weight} -> undefer(record, next_weight)
+    end
+  end
+
+  def do_undefer(record, weight) do
+    map = case record do
+      %{__struct__: _} -> Map.from_struct(record)
+      %{} -> record
+    end
+
+    map
+    |> Enum.reduce({record, nil}, fn({key, value}, {acc_record, acc_weight}) ->
+      case value do
+        %ExMachina.DeferredAttribute{} ->
+          # Deferred attribute and it is time to apply
+          if value.weight <= weight do
+            new_value = value.func.(acc_record)
+            {Map.put(acc_record, key, new_value), acc_weight}
+          # Deferred attribute, but will apply later
+          else
+            next_weight = cond do
+              is_nil(acc_weight) -> value.weight         # 1. Next weight is at least this deferred weight
+              value.weight < acc_weight -> value.weight  # 2. Found a lower weight we should run next
+              true -> acc_weight                         # 3. No lower weight found
+            end
+            {acc_record, next_weight}
+          end
+        # Not a deferred attribute
+        _ -> {acc_record, acc_weight}
+      end
+    end)
+  end
 
   @doc """
   Builds and returns 2 records with the passed in factory_name and attrs

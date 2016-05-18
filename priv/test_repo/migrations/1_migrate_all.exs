@@ -18,6 +18,7 @@ defmodule ExMachina.TestRepo.Migrations.MigrateAll do
       add :author_id, :integer
       add :editor_id, :integer
       add :site_id, :integer
+      add :publisher_id, :integer
       add :visits, :decimal
     end
 

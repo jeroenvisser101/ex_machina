@@ -34,8 +34,7 @@ defmodule ExMachina.EctoTest do
     assert TestFactory.params_for(:user) == %{
       name: "John Doe",
       admin: false,
-      articles: [],
-      site_id: nil
+      articles: []
     }
   end
 
